@@ -36,7 +36,7 @@ try {
     $env:HERMES_TEST_FILE_RETRIES = '0'
     $env:PATH = (Split-Path $Bash) + ';C:\Program Files\Git\usr\bin;' + $env:PATH
     $testFiles = @(Get-ChildItem tests/agent,tests/tools,tests/hermes_cli -File | Where-Object {
-        $_.Name -match '^(test_verification.*|test_write_approval.*|test_memory_tool.*|test_skill_manager_tool|test_doctor.*)\.py$'
+        $_.Name -match '^(test_verification.*|test_write_approval.*|test_memory_tool.*|test_skill_manager_tool|test_doctor.*|test_local_projector_presets|test_local_preset_admission)\.py$'
     } | ForEach-Object { [IO.Path]::GetRelativePath($SourcePath, $_.FullName).Replace('\', '/') })
     & $Bash scripts/run_tests.sh @testFiles -j 4 --tb=short *> (Join-Path $candidate 'tests.log')
     & $TestPython scripts/check --base $UpstreamTag *> (Join-Path $candidate 'checks.log')
@@ -45,7 +45,7 @@ try {
     $source = Join-Path $candidate 'source'
     Expand-Archive -LiteralPath $archive -DestinationPath $source
     $venv = Join-Path $candidate 'venv'
-    & $BootstrapPython -m pm.build_env --source $source --out $venv *> (Join-Path $candidate 'build.log')
+    & $BootstrapPython -m pm.build_env --source $source --out $venv --extra all *> (Join-Path $candidate 'build.log')
     $candidatePython = Join-Path $venv 'Scripts\python.exe'
     Push-Location $source
     try {
@@ -56,7 +56,7 @@ try {
         schemaVersion = 1; repository = 'qwer36613698/hermes-agent'; sourceCommit = $sha
         upstreamTag = $UpstreamTag; candidateTag = $id; builtAt = [DateTime]::UtcNow.ToString('o')
         platform = 'windows-x64'; packageType = 'source-with-local-cli-environment'
-        testsPassed = $true; smokePassed = $true
+        testsPassed = $true; smokePassed = $true; extras = @('all')
         archive = 'hermes-custom-source.zip'; sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
         sourcePath = $source; python = $candidatePython; installPolicy = 'manual-approval'
         limitations = @('No desktop MSIX built or UI tested.', 'Local environment uses the managed Python runtime; source ZIP is not a standalone installer.')

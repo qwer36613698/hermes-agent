@@ -66,11 +66,21 @@ class _Companions:
     nbytes: int = 0
 
 
-def _companions(entry) -> _Companions:
-    if entry is None:
-        return _Companions()
-    mmproj, head = _asset_path(entry.mmproj), _asset_path(entry.mtp_head)
-    nbytes = sum(a.size_bytes for a, p in ((entry.mmproj, mmproj), (entry.mtp_head, head)) if p)
+def _companions(entry, model_id: str = "") -> _Companions:
+    mmproj = _asset_path(entry.mmproj) if entry is not None else None
+    head = _asset_path(entry.mtp_head) if entry is not None else None
+    nbytes = 0
+    if entry is not None:
+        nbytes = sum(a.size_bytes for a, p in ((entry.mmproj, mmproj), (entry.mtp_head, head)) if p)
+    # Locally staged Qwen variants share the projector installed outside the catalog.
+    if mmproj is None and model_id.startswith("Qwen3.5-9B-"):
+        from hermes_cli.local_runtime.bootstrap import assets_dir
+
+        local = assets_dir() / "mmproj-F16.gguf"
+        if local.exists():
+            mmproj = local
+            declared = entry.mmproj if entry is not None else None
+            nbytes += declared.size_bytes if declared is not None else local.stat().st_size
     return _Companions(mmproj=mmproj, mtp_head=head, nbytes=nbytes)
 
 
@@ -118,7 +128,7 @@ def preset_for_model(gguf: Path, budget: HardwareBudget,
         logger.warning("preset skip %s: %s", gguf.name, exc)
         return None
     entry = entry_for_model(model_id)
-    companions = _companions(entry)
+    companions = _companions(entry, model_id)
     is_mtp = _runs_mtp(entry, companions) if entry is not None else model_id in mtp_capable
 
     fixed_overhead = RUNTIME_OVERHEAD_BYTES + companions.nbytes
@@ -158,11 +168,11 @@ def preset_for_model(gguf: Path, budget: HardwareBudget,
     # carrying neither runs llama.cpp defaults.
     for k, v in header.sampling_defaults.items():
         keys.setdefault(k, v)
+    if companions.mmproj is not None:
+        keys["mmproj"] = str(companions.mmproj)
     if entry is not None:
         for k, v in (entry.sampling or {}).items():
             keys.setdefault(k, v)
-        if companions.mmproj is not None:
-            keys["mmproj"] = str(companions.mmproj)
         if companions.mtp_head is not None:
             # The model carries no MTP layers: draft-mtp drafts from the shipped head instead.
             keys["model-draft"] = str(companions.mtp_head)
@@ -188,7 +198,7 @@ def resident_footprint(gguf: Path, budget: HardwareBudget, window: int) -> int |
         logger.debug("footprint skip %s: %s", gguf.name, exc)
         return None
     entry = entry_for_model(model_id)
-    companions = _companions(entry)
+    companions = _companions(entry, model_id)
     is_mtp = _runs_mtp(entry, companions)
     plan = plan_launch(profile, budget, mtp_capable=is_mtp,
                        fixed_overhead=RUNTIME_OVERHEAD_BYTES + companions.nbytes,
@@ -210,7 +220,7 @@ def _launch_footprint(gguf: Path, budget: HardwareBudget) -> int | None:
         logger.debug("footprint skip %s: %s", gguf.name, exc)
         return None
     entry = entry_for_model(model_id)
-    companions = _companions(entry)
+    companions = _companions(entry, model_id)
     plan = plan_launch(profile, budget, mtp_capable=_runs_mtp(entry, companions),
                        fixed_overhead=RUNTIME_OVERHEAD_BYTES + companions.nbytes,
                        requested_window=load_window_overrides().get(model_id))
