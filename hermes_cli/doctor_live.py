@@ -198,4 +198,5 @@ def maybe_run_live_checks(args, issues: list[str]):
         return run_live_checks(issues)
     except Exception as exc:  # catch-all: doctor must survive
         check_warn("Live backend probes crashed", f"({exc})")
+        issues.append(f"Live backend probes incomplete ({type(exc).__name__}); re-run hermes doctor --live.")
         return None

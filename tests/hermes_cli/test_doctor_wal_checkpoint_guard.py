@@ -54,12 +54,12 @@ def test_doctor_checkpoint_runs_only_on_the_exclusive_repair_guard(tmp_path, mon
 
 
 def test_session_count_reads_a_home_with_uri_reserved_characters(tmp_path):
-    """`file:` URIs treat '?' and '#' as delimiters; a home named `profile?blue` must still count."""
+    """`file:` URIs treat '#' as a delimiter; use a filename valid on every host."""
     import sqlite3
 
     from hermes_cli.doctor_state import _session_count
 
-    home = tmp_path / "profile?blue#x"
+    home = tmp_path / "profile blue#x"
     home.mkdir()
     db = home / "state.db"
     conn = sqlite3.connect(db)

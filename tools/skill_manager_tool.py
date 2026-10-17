@@ -668,7 +668,12 @@ def _run_write_gate(build_staging):
     if decision.blocked:
         return tool_error(decision.message, success=False)
     payload, gist = build_staging(wa)
-    record = wa.stage_write(wa.SKILLS, payload, summary=gist, origin=wa.current_origin())
+    try:
+        record = wa.stage_write(wa.SKILLS, payload, summary=gist, origin=wa.current_origin())
+    except Exception:
+        logger.warning("Failed to save pending skill write", exc_info=True)
+        return tool_error("Skill was not changed: the approval proposal could not be saved. "
+                          "Check storage permissions and available space before retrying.", success=False)
     return json.dumps({"success": True, "staged": True, "pending_id": record["id"],
                        "gist": gist, "message": decision.message}, ensure_ascii=False)
 

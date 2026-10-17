@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from hermes_constants import get_hermes_home
+from agent.verification_command_intent import verification_intent
 
 
 _DB_LOCK = threading.Lock()
@@ -272,7 +273,9 @@ def _find_canonical_match(command: str, canonical_commands: list[str], exit_code
             candidate_tokens = _strip_command_prefix(segment.tokens)
             for candidate in _equivalent_needles(needle):
                 if candidate_tokens[:len(candidate)] == candidate and _exit_status_is_attributable(segments, index, exit_code):
-                    return canonical, candidate_tokens[len(candidate):]
+                    trailing = candidate_tokens[len(candidate):]
+                    if verification_intent(canonical, trailing)[0]:
+                        return canonical, trailing
     return None
 
 
@@ -440,7 +443,8 @@ def classify_verification_command(
     if match is not None:
         canonical, trailing_args = match
         kind = _kind_for_command(canonical)
-        scope = "targeted" if any(map(_looks_like_target, trailing_args)) else "full"
+        filtered = verification_intent(canonical, trailing_args)[1]
+        scope = "targeted" if filtered or any(map(_looks_like_target, trailing_args)) else "full"
     else:
         if verify_commands or _find_ad_hoc_match(command, facts.get("root"), int(exit_code)) is None:
             return None

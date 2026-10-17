@@ -6,12 +6,14 @@ Check bodies live in the ``doctor_*`` siblings.
 
 import os
 import sys
+import logging
 
 from hermes_cli.config import get_env_path, get_hermes_home, get_project_root
 from hermes_cli.env_loader import load_hermes_dotenv
 from hermes_constants import display_hermes_home
 
 PROJECT_ROOT = get_project_root()
+logger = logging.getLogger(__name__)
 HERMES_HOME = get_hermes_home()
 _DHH = display_hermes_home()  # user-facing display path (e.g. ~/.hermes or ~/.hermes/profiles/coder)
 
@@ -147,7 +149,10 @@ def _ack_advisory(ack_target: str) -> None:
 
 def _print_summary(should_fix: bool, total: Finding) -> None:
     print()
-    remaining = total.issues + total.manual_issues
+    remaining = total.issues + total.manual_issues + [
+        f"Diagnostic incomplete: {name}. Re-run after resolving the check failure."
+        for name in total.incomplete_checks
+    ]
     numbered = "".join(f"  {i}. {issue}\n" for i, issue in enumerate(remaining, 1))
     if should_fix and total.fixed > 0:
         print(color("─" * 60, Colors.GREEN))
@@ -185,10 +190,18 @@ def run_doctor(args):
     for title, check in DOCTOR_CHECKS:
         if title:
             _section(title)
-        total.merge(check(should_fix))
+        try:
+            total.merge(check(should_fix))
+        except Exception as exc:
+            logger.exception("Diagnostic check interrupted: %s", title or check.__name__)
+            total.incomplete_checks.append(f"{title or check.__name__} ({type(exc).__name__})")
     # Opt-in live probes run AFTER all static checks (`--live`: real network calls; bounded + read-only).
-    with warn_on_error(""):
+    try:
         from hermes_cli.doctor_live import maybe_run_live_checks
         maybe_run_live_checks(args, total.manual_issues)
+    except Exception as exc:
+        logger.exception("Could not run live diagnostics")
+        if getattr(args, "live", False):
+            total.incomplete_checks.append(f"Live backend probes ({type(exc).__name__})")
     _print_summary(should_fix, total)
-    return int(bool(total.issues or total.manual_issues))
+    return int(bool(total.issues or total.manual_issues or total.incomplete_checks))

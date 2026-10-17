@@ -96,8 +96,14 @@ def _gate_or_stage(store: MemoryStore, summary: str, detail: str, payload: dict[
         return tool_error(decision.message, success=False)
     if (unmatched := _pin_matched_entries(store, payload)) is not None:
         return unmatched
+    try:
+        record = wa.stage_write(wa.MEMORY, payload, summary=f"{summary}: {detail[:120]}", origin=wa.current_origin())
+    except Exception:
+        logger.warning("Failed to save pending memory write", exc_info=True)
+        FAILURE_CLASS.set("gate_refused")
+        return tool_error("Memory was not changed: the approval proposal could not be saved. "
+                          "Check storage permissions and available space before retrying.", success=False)
     FAILURE_CLASS.set("staged")
-    record = wa.stage_write(wa.MEMORY, payload, summary=f"{summary}: {detail[:120]}", origin=wa.current_origin())
     return json.dumps({"success": True, "staged": True, "pending_id": record["id"], "message": decision.message},
                       ensure_ascii=False)
 
@@ -215,8 +221,9 @@ def _background_delete_gate(store, action, operations, target="memory", content=
         logger.warning("Failed to stage background-review consolidation; denying", exc_info=True)
         FAILURE_CLASS.set("gate_refused")
         return tool_error(
+            "The approval proposal could not be saved; memory was not changed. "
             "Background review may not delete memory entries ('patch'/'remove', including in a "
-            "batch); 'add' is still available.", success=False)
+            "batch) without approval; 'add' is still available.", success=False)
 
 
 def memory_tool(action: str | None = None, target: str = "memory", content: str | None = None, old_text: str | None = None,

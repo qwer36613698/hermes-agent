@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import functools
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from hermes_cli.colors import Colors, color
+
+logger = logging.getLogger(__name__)
 
 
 def _mark(glyph: str, col: str):
@@ -58,28 +61,31 @@ class Finding:
     issues: list = field(default_factory=list)
     manual_issues: list = field(default_factory=list)
     fixed: int = 0
+    incomplete_checks: list[str] = field(default_factory=list)
 
     def merge(self, other: Finding) -> None:
         self.issues.extend(other.issues)
         self.manual_issues.extend(other.manual_issues)
         self.fixed += other.fixed
+        self.incomplete_checks.extend(other.incomplete_checks)
 
 
 def doctor_check(on_error: str | None = None, detail: str = ""):
     """Turn ``fn(should_fix, f: Finding)`` into a ``(should_fix) -> Finding`` doctor check.
 
-    *on_error* None: exceptions propagate (as they always did for that check). Otherwise the check is
-    best-effort via :func:`warn_on_error` (``""`` = silent) and the partial Finding is still returned,
-    so issues recorded before the crash survive."""
+    Exceptions preserve partial findings and record an incomplete check. ``on_error``
+    optionally supplies an immediate warning; the summary always reports the interruption."""
     def deco(fn):
         @functools.wraps(fn)
         def check(should_fix: bool) -> Finding:
             f = Finding()
-            if on_error is None:
+            try:
                 fn(should_fix, f)
-            else:
-                with warn_on_error(on_error, detail):
-                    fn(should_fix, f)
+            except Exception as e:
+                logger.exception("Diagnostic check interrupted: %s", fn.__name__)
+                f.incomplete_checks.append(f"{fn.__name__} ({type(e).__name__})")
+                if on_error:
+                    check_warn(on_error.format(e=e), detail.format(e=e))
             return f
         return check
     return deco
