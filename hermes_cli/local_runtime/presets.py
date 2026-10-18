@@ -24,6 +24,12 @@ _FLAG_TO_KEY = {
     "-ot": "override-tensor", "--spec-type": "spec-type", "--spec-draft-n-max": "spec-draft-n-max",
 }
 
+# Local variants can share a family projector without belonging to the catalog.
+_LOCAL_PROJECTORS = {
+    "Qwen3.5-9B-": "mmproj-F16.gguf",
+    "MiniCPM-V-4.7-1B-": "mmproj-MiniCPM-V-4.7-1B-BF16.gguf",
+}
+
 
 @dataclass
 class PresetEntry:
@@ -72,15 +78,15 @@ def _companions(entry, model_id: str = "") -> _Companions:
     nbytes = 0
     if entry is not None:
         nbytes = sum(a.size_bytes for a, p in ((entry.mmproj, mmproj), (entry.mtp_head, head)) if p)
-    # Locally staged Qwen variants share the projector installed outside the catalog.
-    if mmproj is None and model_id.startswith("Qwen3.5-9B-"):
+    local_name = next((name for prefix, name in _LOCAL_PROJECTORS.items()
+                       if model_id.startswith(prefix)), None)
+    if mmproj is None and local_name is not None:
         from hermes_cli.local_runtime.bootstrap import assets_dir
 
-        local = assets_dir() / "mmproj-F16.gguf"
+        local = assets_dir() / local_name
         if local.exists():
             mmproj = local
-            declared = entry.mmproj if entry is not None else None
-            nbytes += declared.size_bytes if declared is not None else local.stat().st_size
+            nbytes += local.stat().st_size
     return _Companions(mmproj=mmproj, mtp_head=head, nbytes=nbytes)
 
 

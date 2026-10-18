@@ -27,3 +27,10 @@
 測試、封裝與 smoke 全部通過後才能 fast-forward 客製分支、正常 push（禁止 force push）。安裝另行確認。
 
 GitHub Actions 在此個人 fork 停用，本機編譯不影響其他已登記專案的建置方式。
+
+## 本機視覺模型相容性
+
+保留 Qwen3.5-9B 的本機投影檔配對，並加入 MiniCPM-V-4.7-1B 對應的 mmproj-MiniCPM-V-4.7-1B-BF16.gguf。優先使用已下載的 catalog 配對；本機備援以實際檔案大小計入記憶體。
+
+llama.cpp 引擎固定為官方 v0.7.0 指向的 b11669，包含 MiniCPM-V 4.7 投影格式支援。各平台使用官方資產 SHA-256；本機安裝需另經 PM 部署引擎，不會因 Python 核心更新而自動替換既有引擎。
+

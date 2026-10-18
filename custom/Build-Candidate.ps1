@@ -3,6 +3,7 @@
 param(
     [string]$SourcePath = (Split-Path -Parent $PSScriptRoot),
     [string]$StatePath = 'D:\AI_Data\ManagedForks\hermes-agent',
+    [string]$DependencyCache = '',
     [string]$UpstreamTag = 'v0.22.2',
     [string]$TestPython = 'D:\AI_Data\ManagedForks\hermes-agent\test-env\Scripts\python.exe',
     [string]$BootstrapPython = 'D:\AI_Data\ManagedForks\hermes-agent\runtime\python-3.14.7+20260901-win32-x64\python.exe',
@@ -45,7 +46,8 @@ try {
     $source = Join-Path $candidate 'source'
     Expand-Archive -LiteralPath $archive -DestinationPath $source
     $venv = Join-Path $candidate 'venv'
-    & $BootstrapPython -m pm.build_env --source $source --out $venv --extra all *> (Join-Path $candidate 'build.log')
+    $cacheArgs = if ($DependencyCache) { @('--cache', $DependencyCache) } else { @() }
+    & $BootstrapPython -m pm.build_env --source $source --out $venv --extra all @cacheArgs *> (Join-Path $candidate 'build.log')
     $candidatePython = Join-Path $venv 'Scripts\python.exe'
     Push-Location $source
     try {
